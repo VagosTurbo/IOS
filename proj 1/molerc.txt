@@ -1,0 +1,2 @@
+export MOLE_RC=/home/boriss/Documents/'VUT FIT'/IOS/'proj 1'
+MOLE_RC=/home/boriss/Documents/VUT\ FIT/IOS/proj\ 1/log 

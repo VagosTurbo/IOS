@@ -1,0 +1,8 @@
+heh
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    COMMAND="$1"
+    shift
+    ;;
+done
