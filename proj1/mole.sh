@@ -13,6 +13,20 @@ print_help(){
     echo "mole secret-log [-b DATE] [-a DATE] [DIRECTORY1 [DIRECTORY2 [...]]]"
 }
 
+choose_editor(){
+    if [ -z "${EDITOR}" ]; then
+        if [ -z "${VISUAL}" ]; then
+            EDITOR=vi
+        else 
+            EDITOR=${VISUAL}
+        fi
+    fi
+} 
+
+list(){
+    awk -F ";" '{print $1";"$2";"$3";"$4}' ${MOLE_RC} | grep ${FILE} | sort -r
+}
+
 EDITOR=
 VISUAL=
 GROUP="-"
@@ -31,20 +45,23 @@ while [ "$#" -gt 0 ]; do
     shift
     ;;
     "-m")
+    DIRECTORY=$2
+    shift
+    shift
+    ;;
+    "list")
+    DIRECTORY=$2
+    shift
+    FILE=$1
+    list
+    exit 0
     ;;
     esac
     break
 done
 FILE=$1
 
-
-if [ -z "${EDITOR}" ]; then
-    if [ -z "${VISUAL}" ]; then
-        EDITOR=vi
-    else 
-        EDITOR=${VISUAL}
-    fi
-fi    
+choose_editor
 
 eval ${EDITOR} ${FILE}
 echo ${GROUP}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC} 
