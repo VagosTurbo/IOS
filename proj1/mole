@@ -21,13 +21,23 @@ choose_editor(){
             EDITOR=${VISUAL}
         fi
     fi
-} 
-
-list(){
-    awk -F ";" '{print $1";"$2";"$3";"$4}' ${MOLE_RC} | grep ${FILE} | sort -r
 }
 
-EDITOR=
+dir_check(){
+    if [ -z "${DIRECTORY}" ]; then
+        DIRECTORY=$(pwd)
+    fi
+    if [ ! -d "${DIRECTORY}" ]; then
+        echo "Directory does not exists"
+        exit 1
+    fi
+}
+
+last_opened(){
+    REALPATH= awk -F";" -v dir="$DIRECTORY" -v path="" '{if($3=="DIRECTORY")path=$2;}END{print path}' ${MOLE_RC}
+}
+
+EDITOR=nano
 VISUAL=
 GROUP="-"
 DIRECTORY=$(pwd)
@@ -46,22 +56,30 @@ while [ "$#" -gt 0 ]; do
     ;;
     "-m")
     DIRECTORY=$2
+    dir_check
+    last_opened
+    echo "$REALPATH"
     shift
     shift
+    FILE="ahojku"
     ;;
     "list")
     DIRECTORY=$2
     shift
     FILE=$1
+    echo $DIRECTORY
+    echo
     list
     exit 0
     ;;
     esac
     break
 done
+
 FILE=$1
+REALPATH=$(realpath "$FILE")
+echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}
 
 choose_editor
-
-eval ${EDITOR} ${FILE}
-echo ${GROUP}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC} 
+eval $EDITOR $REALPATH
+echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}"

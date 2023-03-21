@@ -5,4 +5,6 @@ while [ "$#" -gt 0 ]; do
     COMMAND="$1"
     shift
     ;;
-done
+done-;/home/boriss/Documents/VUT-FIT/IOS/proj1/ahoj.txt;/home/boriss/Documents/VUT-FIT/IOS/proj1;/home/boriss/Documents/VUT-FIT/IOS/proj1/ahoj.txt;2023-03-21_22-21
+-;/home/boriss/Documents/VUT-FIT/IOS/proj1/ahoj.txt;/home/boriss/Documents/VUT-FIT/IOS/proj1;ahoj.txt;2023-03-21_22-22
+-;/home/boriss/Documents/VUT-FIT/IOS/proj1/ahoj.txt;/home/boriss/Documents/VUT-FIT/IOS/proj1;ahoj.txt;2023-03-21_22-23
