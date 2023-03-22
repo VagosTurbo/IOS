@@ -1,2 +1,4 @@
 export MOLE_RC=/home/boriss/Documents/VUT-FIT/IOS/proj1
 MOLE_RC=/home/boriss/Documents/VUT-FIT/IOS/proj1/log
+
+alias mole='/home/boriss/Documents/VUT-FIT/IOS/proj1/mole'

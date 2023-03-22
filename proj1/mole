@@ -13,6 +13,7 @@ print_help(){
     echo "mole secret-log [-b DATE] [-a DATE] [DIRECTORY1 [DIRECTORY2 [...]]]"
 }
 
+#choose editor for editing files
 choose_editor(){
     if [ -z "${EDITOR}" ]; then
         if [ -z "${VISUAL}" ]; then
@@ -23,6 +24,7 @@ choose_editor(){
     fi
 }
 
+#checks if variable DIRECTORY is empty if so, it is set to current directory and also it checks if directory really exists
 dir_check(){
     if [ -z "${DIRECTORY}" ]; then
         DIRECTORY=$(pwd)
@@ -33,53 +35,171 @@ dir_check(){
     fi
 }
 
-last_opened(){
-    REALPATH= awk -F";" -v dir="$DIRECTORY" -v path="" '{if($3=="DIRECTORY")path=$2;}END{print path}' ${MOLE_RC}
+#finds last opened file from given directory and returns realpath of the file to REALPATH variable
+last_opened_in_dir(){
+    REALPATH=$(awk -F";" -v dir="${DIRECTORY}" '{if($3==dir)path=$2;}END{print path}' ${MOLE_RC})
 }
+    
+#REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" '{if($3==dir) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+#finds most opened file from given directory and returns realpath of the file to REALPATH variable
+most_opened_file(){
+    REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+}
+
+most_opened_file_in_group(){
+    REALPATH=$(awk -F ";" -v after="${AFTER}" -v before="${BEFORE}" -v group="${GROUP}" '{if($5>=after && $5<=before && $1==group) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+}
+
+list(){
+    FILENAMES=$(awk -v dir="${DIRECTORY}" '{if ($3==dir) {print $4}}' ${MOLE_RC} | uniq | sort -u )
+    echo $FILENAMES
+
+}
+
+#opens file and log it to mole_rc
+edit_and_log(){
+    eval $EDITOR $REALPATH
+    echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}
+}
+
+#if path was set renaming variable FILE
+filename_check(){
+    if [[ ${FILE:0:1} == "/" ]] || [[ ${FILE:0:1} == "~" ]]; then
+        FILE=$(basename ${FILE})
+    fi
+}
+
+was_dir_edited(){
+    DIRCOUNT=""
+    DIRCOUNT=$(awk -F ";" -v dir="$DIRECTORY" '{if($3==dir) print 1}' ${MOLE_RC})
+    if [[ -z $DIRCOUNT ]]; then
+        echo "Subor este nebol editovany"
+        exit 1
+    fi
+}
+
+date_check(){
+    if ! echo "$DATECHECK" | grep -qE '^[0-9]{4}-[0-3][1-9]-[0-3][1-9]$'; then
+        echo "$DATECHECK is not in the format YYYY-MM-DD"
+        exit 1
+    fi
+}
+
 
 EDITOR=nano
 VISUAL=
+choose_editor
+
+FILE=
 GROUP="-"
 DIRECTORY=$(pwd)
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H-%M)
+AFTER="0000_01_01"
+BEFORE="9999_31_31"
+
+#if user didnt inputed dir/file
+if [ $# -eq 0 ]; then
+    last_opened_in_dir
+    if [ -z ${REALPATH} ]; then
+        exit 1
+    fi
+    edit_and_log
+    exit 0
+fi
+
+ARG_G=
+ARG_M=
+ARG_LIST=
 
 while [ "$#" -gt 0 ]; do
-    case $1 in
-    "-h") print_help
-    exit 0
-    ;;
-    "-g")
-    GROUP=$2
-    shift
-    shift
-    ;;
-    "-m")
-    DIRECTORY=$2
-    dir_check
-    last_opened
-    echo "$REALPATH"
-    shift
-    shift
-    FILE="ahojku"
-    ;;
-    "list")
-    DIRECTORY=$2
-    shift
     FILE=$1
-    echo $DIRECTORY
-    echo
-    list
-    exit 0
-    ;;
+    case $1 in
+    "-h") 
+        print_help
+        exit 0
+        ;;
+    "-g")
+        ARG_G=true
+        GROUP=$2
+        FILE=$3
+        ;;
+    "-m")
+        ARG_M=true
+        if [ -z $3 ]; then
+            DIRECTORY=$2
+            else
+            DIRECTORY=$3
+        fi
+        ;;
+    "list")
+        ARG_LIST=true
+        if [ ! -z $2 ]; then
+            DIRECTORY=$2
+        fi
+        ;;
+    "-a")
+        DATECHECK=$2
+        date_check
+        AFTER=${DATECHECK}
+        ;;
+    "-b")
+        DATECHECK=$2
+        date_check
+        BEFORE=${DATECHECK}
+        ;;
     esac
-    break
+    shift
 done
 
-FILE=$1
-REALPATH=$(realpath "$FILE")
-echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}
+if [[ $ARG_M && $ARG_G ]]; then
+    most_opened_file_in_group
+    FILE=$REALPATH
+    filename_check
+    edit_and_log
+    exit 0
+fi
 
-choose_editor
-eval $EDITOR $REALPATH
-echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}"
+#-g switch on
+if [ $ARG_G ]; then
+    REALPATH=$(realpath "$FILE")
+    DIRECTORY=$(dirname "$REALPATH")
+    filename_check
+    edit_and_log
+    exit 0
+fi
+
+if [ $ARG_M ]; then
+    dir_check
+    was_dir_edited
+    most_opened_file
+    FILE=$REALPATH
+    filename_check
+    edit_and_log
+    exit 0
+fi
+
+
+#-m switch on
+if [ $ARG_M ]; then
+    dir_check
+    was_dir_edited
+    most_opened_file
+    FILE=$REALPATH
+    filename_check
+    edit_and_log
+    exit 0
+fi
+
+if [ $ARG_LIST ]; then
+    dir_check
+    was_dir_edited
+    list
+    exit 0
+fi
+
+REALPATH=$(realpath "$FILE")
+DIRECTORY=$(dirname "$REALPATH")
+filename_check
+edit_and_log
+exit 0

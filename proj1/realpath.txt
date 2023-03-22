@@ -1,0 +1,7 @@
+hahah
+
+most_opened_file
+        FILE=$REALPATH
+        filename_check
+        edit_and_log
+        exit 0
