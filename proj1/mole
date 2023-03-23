@@ -1,16 +1,18 @@
 #!/bin/bash
 
+#Autor: xseman06
+
 export POSIXLY_CORRECT=yes
 
 print_help(){
-    echo "Mole program"
-    echo 
-    echo "sposoby pouzita:"
-    echo "mole -h"
-    echo "mole [-g GROUP] FILE"
-    echo "mole [-m] [FILTERS] [DIRECTORY]"
-    echo "mole list [FILTERS] [DIRECTORY]"
-    echo "mole secret-log [-b DATE] [-a DATE] [DIRECTORY1 [DIRECTORY2 [...]]]"
+    echo "                                      Mole program"
+    echo "USAGE:  [-h]                                          Prints help"
+    echo "        [-g GROUP] FILE                             Sorts opened file into group"
+    echo "        [-m][FILTERS] [DIRECTORY]                   When argument -m is typed, mole opens most opened file in directory"
+    echo "        [FILTERS] [DIRECTORY]                       Opens last opened file in directory"
+    echo "        list [FILTERS] [DIRECTORY]                  Prints list of opened files. Can be filtered by filters or directory"
+    echo "        secret-log [-b DATE] [-a DATE] [DIRECTORY]  Makes a secret log in secret location. Can be filtered with filters or"
+    echo "                                                    it can be specified to certain directory"
 }
 
 #choose editor for editing files
@@ -24,6 +26,16 @@ choose_editor(){
     fi
 }
 
+#checks if utility real path is avaliable
+check_realpath() {
+    if ! command -v realpath &> /dev/null; then
+        echo "utilita realpath chyba" >&2
+        exit 1
+    fi
+
+}
+
+
 #checks if variable DIRECTORY is empty if so, it is set to current directory and also it checks if directory really exists
 dir_check(){
     #if dir is empty or if on dir place was written a filter
@@ -31,25 +43,27 @@ dir_check(){
         DIRECTORY=$(pwd)
     fi
     if [ ! -d "${DIRECTORY}" ]; then
-        echo "Directory does not exists"
+        echo "Directory does not exists" >&2
         exit 1
     fi
 }
 
 #finds last opened file from given directory and returns realpath of the file to REALPATH variable
 last_opened_in_dir(){
-    REALPATH=$(awk -F";" -v dir="${DIRECTORY}" '{if($3==dir)path=$2;}END{print path}' ${MOLE_RC})
+    #if -g was switched, finding last opened file in the group
+    if [ ${ARG_G} ]; then
+        REALPATH=$(awk -F";" -v dir="${DIRECTORY}" -v group="${GROUP}" '{if($3==dir && $1==group )path=$2;}END{print path}' ${MOLE_RC})
+    else
+        REALPATH=$(awk -F";" -v dir="${DIRECTORY}" '{if($3==dir)path=$2;}END{print path}' ${MOLE_RC})
+    fi
 }
     
 #finds most opened file from given directory and returns realpath of the file to REALPATH variable
 most_opened_file(){
-    if [[ ${ARG_G} == true ]]; then
-        REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
-    else
-        REALPATH=$(awk -F ";" -v after="${AFTER}" -v before="${BEFORE}" -v group="${GROUP}" '{if($5>=after && $5<=before && $1==group) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
-    fi
+    REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}"  '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
 }
 
+#finds most opened file from given directory and returns realpath of the file to REALPATH variable
 most_opened_file_in_group(){
     REALPATH=$(awk -F ";" -v after="${AFTER}" -v before="${BEFORE}" -v group="${GROUP}" '{if($5>=after && $5<=before && $1==group) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
 }
@@ -78,16 +92,15 @@ list(){
 
     for ((i = 0; i < ${#filenames[@]}; i++))
     do
-        # Get the current filename
         filename=${filenames[$i]}
-        # Use awk to extract the unique groups that belong to the current filename
+        #finds all groups that the file is in
         groups=$(awk -F';' -v filename="${filename}" -v after="${AFTER}" -v before="${BEFORE}" '{if($4 == filename && $5>=after && $5<=before) print $1}' ${MOLE_RC} | sort -u | paste -sd,)
         
-        #file is in any group, don display "-"
+        #if file is in any group, remove "-"
         if [[ ${#groups} > 1 && "${groups:0:1}" == "-" ]]; then
             groups="${groups:2}"
         fi
-        # Print the filename and its associated groups
+        #prints the filename and groups that it was opened with
         printf "%-*s%s\n" "$INDENTLENGTH" "$filename:" "$groups"
 
     done
@@ -97,10 +110,10 @@ list(){
 #opens file and log it to mole_rc
 edit_and_log(){
     if [ -z "$REALPATH" ]; then
-        echo "Chyba, subor sa nenasiel"
+        echo "Chyba, subor sa nenasiel" >&2
         exit 1
     fi
-    echo "OTVARAM SUBOR" ${FILE}
+    FILE=$(basename "${REALPATH}")
     eval $EDITOR $REALPATH
     echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}
 }
@@ -112,41 +125,52 @@ filename_check(){
     fi
 }
 
+#checks if directory was ever opened through mole
 was_dir_edited(){
     DIRCOUNT=""
     DIRCOUNT=$(awk -F ";" -v dir="$DIRECTORY" '{if($3==dir) print 1}' ${MOLE_RC})
     if [[ -z $DIRCOUNT ]]; then
-        echo "Subor este nebol editovany"
+        echo "Subor este nebol editovany" >&2
         exit 1
     fi
 }
 
+#checking if date was inputed correctly
 date_check(){
     if ! echo "$DATECHECK" | grep -qE '^[0-9]{4}-[0-3][1-9]-[0-3][1-9]$'; then
-        echo "$DATECHECK is not in the format YYYY-MM-DD"
+        echo "$DATECHECK is not in the format YYYY-MM-DD" >&2
         exit 1
     fi
 }
 
+#generate secret log and save it to .mole directory
 secretlog(){
     USER=$USER
     DIRSECRET="/home/"$USER"/.mole/"
     REALPATHSECRET=$DIRSECRET"log_"$USER"_"$DATE"_"$TIME".bz2"
     CONTENT=
+    #if directory wasnt inputed log all files within time filters
     if [ -z "${DIRECTORY}" ]; then
         mapfile -t realpaths < <(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
     else
+        #logging files from inputed directory
         mapfile -t realpaths < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
     fi
+    #cycles through list of realpaths
     for rpath in "${realpaths[@]}"
     do
+        #finding all groups that the realpath is in
         times=$(awk -F';' -v rpath="${rpath}" -v after="${AFTER}" -v before="${BEFORE}" '{if($2 == rpath && $5>=after && $5<=before) print $5}' ${MOLE_RC} | sort -u | paste -sd";")
         CONTENT=$(printf '%s;%s\n' "$rpath" "$times")
+        #printing to secret log
         echo "$CONTENT" | bzip2 >> $REALPATHSECRET
     done
 }
 
-EDITOR=
+check_realpath
+
+#variables for possible editors and choosing editor
+EDITOR=nano
 VISUAL=
 choose_editor
 
@@ -158,10 +182,11 @@ TIME=$(date +%H-%M-%S)
 AFTER="0000_01_01"
 BEFORE="9999_31_31"
 
-#if user didnt inputed dir/file
+#if user didnt inputed anything open last edited file in this dir
 if [ $# -eq 0 ]; then
     last_opened_in_dir
     if [ -z ${REALPATH} ]; then
+        echo "ziaden subor este nebol editovany" >&2
         exit 1
     fi
     edit_and_log
@@ -173,6 +198,7 @@ ARG_M=
 ARG_LIST=
 ARG_SL=
 
+#processing arguments
 while [ "$#" -gt 0 ]; do
     FILE=$1
     case $1 in
@@ -183,7 +209,7 @@ while [ "$#" -gt 0 ]; do
     "-g")
         ARG_G=true
         GROUP=$2
-        FILE=$3
+        FILE_G=$3
         ;;
     "-m")
         ARG_M=true
@@ -228,6 +254,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+#list switch on
 if [ ${ARG_LIST} ]; then
     dir_check
     was_dir_edited
@@ -248,6 +275,13 @@ fi
 
 #-g switch on
 if [ ${ARG_G} ]; then
+    #if -g was used to open last opened file in the group
+    if [ -z "${FILE_G}" ]; then
+        last_opened_in_dir
+        edit_and_log
+        exit 0
+    fi
+    #opens and logs file in group
     REALPATH=$(realpath "$FILE")
     DIRECTORY=$(dirname "$REALPATH")
     filename_check
@@ -255,6 +289,7 @@ if [ ${ARG_G} ]; then
     exit 0
 fi
 
+#if user inputed directory, opens last edited file in certain directory
 if [ -d "${FILE}" ]; then
     DIRECTORY="${FILE}"
     was_dir_edited
@@ -262,6 +297,7 @@ if [ -d "${FILE}" ]; then
     FILE=${REALPATH}
 fi
 
+#secret-log switch on, generates secret log
 if [ ${ARG_SL} ]; then
     secretlog
     exit 0
