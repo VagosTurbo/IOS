@@ -5,3 +5,11 @@ most_opened_file
         filename_check
         edit_and_log
         exit 0
+
+if [[ $ARG_M && $ARG_G ]]; then
+    most_opened_file_in_group
+    FILE=$REALPATH
+    filename_check
+    edit_and_log
+    exit 0
+fi

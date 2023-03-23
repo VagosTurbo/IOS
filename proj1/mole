@@ -26,7 +26,8 @@ choose_editor(){
 
 #checks if variable DIRECTORY is empty if so, it is set to current directory and also it checks if directory really exists
 dir_check(){
-    if [ -z "${DIRECTORY}" ]; then
+    #if dir is empty or if on dir place was written a filter
+    if [ -z "${DIRECTORY}" ] || [ "${DIRECTORY:0:1}" == "-" ]; then
         DIRECTORY=$(pwd)
     fi
     if [ ! -d "${DIRECTORY}" ]; then
@@ -40,10 +41,13 @@ last_opened_in_dir(){
     REALPATH=$(awk -F";" -v dir="${DIRECTORY}" '{if($3==dir)path=$2;}END{print path}' ${MOLE_RC})
 }
     
-#REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" '{if($3==dir) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
 #finds most opened file from given directory and returns realpath of the file to REALPATH variable
 most_opened_file(){
-    REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+    if [[ ${ARG_G} == true ]]; then
+        REALPATH=$(awk -F ";" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+    else
+        REALPATH=$(awk -F ";" -v after="${AFTER}" -v before="${BEFORE}" -v group="${GROUP}" '{if($5>=after && $5<=before && $1==group) print $2}' ${MOLE_RC} | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+    fi
 }
 
 most_opened_file_in_group(){
@@ -51,13 +55,52 @@ most_opened_file_in_group(){
 }
 
 list(){
-    FILENAMES=$(awk -v dir="${DIRECTORY}" '{if ($3==dir) {print $4}}' ${MOLE_RC} | uniq | sort -u )
-    echo $FILENAMES
+    # Read the FILENAME field into an array
+    #if it was filtered by group
+    if [ -z "${GROUP}" ]; then
+        mapfile -t filenames < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $4}' ${MOLE_RC} | sort -u )
+    else
+        mapfile -t filenames < <(awk -F';' -v group="${GROUP}" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before && $1==group) print $4}' ${MOLE_RC} | sort -u )
+    fi
+
+    #getting length of longest file for indenting
+    INDENTLENGTH=${#filenames[0]}
+
+    for ((i = 0; i < ${#filenames[@]}; i++))
+    do
+        LENGTH=${#filenames[$i]}
+        if [[ $LENGTH -gt $INDENTLENGTH ]]; then
+            INDENTLENGTH=$LENGTH
+        fi
+
+    done
+    INDENTLENGTH=$((INDENTLENGTH + 2))
+
+    for ((i = 0; i < ${#filenames[@]}; i++))
+    do
+        # Get the current filename
+        filename=${filenames[$i]}
+        # Use awk to extract the unique groups that belong to the current filename
+        groups=$(awk -F';' -v filename="${filename}" -v after="${AFTER}" -v before="${BEFORE}" '{if($4 == filename && $5>=after && $5<=before) print $1}' ${MOLE_RC} | sort -u | paste -sd,)
+        
+        #file is in any group, don display "-"
+        if [[ ${#groups} > 1 && "${groups:0:1}" == "-" ]]; then
+            groups="${groups:2}"
+        fi
+        # Print the filename and its associated groups
+        printf "%-*s%s\n" "$INDENTLENGTH" "$filename:" "$groups"
+
+    done
 
 }
 
 #opens file and log it to mole_rc
 edit_and_log(){
+    if [ -z "$REALPATH" ]; then
+        echo "Chyba, subor sa nenasiel"
+        exit 1
+    fi
+    echo "OTVARAM SUBOR" ${FILE}
     eval $EDITOR $REALPATH
     echo ${GROUP}";"${REALPATH}";"${DIRECTORY}";"${FILE}";"${DATE}"_"${TIME}>> ${MOLE_RC}
 }
@@ -85,8 +128,25 @@ date_check(){
     fi
 }
 
+secretlog(){
+    USER=$USER
+    DIRSECRET="/home/"$USER"/.mole/"
+    REALPATHSECRET=$DIRSECRET"log_"$USER"_"$DATE"_"$TIME".bz2"
+    CONTENT=
+    if [ -z "${DIRECTORY}" ]; then
+        mapfile -t realpaths < <(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
+    else
+        mapfile -t realpaths < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
+    fi
+    for rpath in "${realpaths[@]}"
+    do
+        times=$(awk -F';' -v rpath="${rpath}" -v after="${AFTER}" -v before="${BEFORE}" '{if($2 == rpath && $5>=after && $5<=before) print $5}' ${MOLE_RC} | sort -u | paste -sd";")
+        CONTENT=$(printf '%s;%s\n' "$rpath" "$times")
+        echo "$CONTENT" | bzip2 >> $REALPATHSECRET
+    done
+}
 
-EDITOR=nano
+EDITOR=
 VISUAL=
 choose_editor
 
@@ -94,7 +154,7 @@ FILE=
 GROUP="-"
 DIRECTORY=$(pwd)
 DATE=$(date +%Y-%m-%d)
-TIME=$(date +%H-%M)
+TIME=$(date +%H-%M-%S)
 AFTER="0000_01_01"
 BEFORE="9999_31_31"
 
@@ -111,6 +171,7 @@ fi
 ARG_G=
 ARG_M=
 ARG_LIST=
+ARG_SL=
 
 while [ "$#" -gt 0 ]; do
     FILE=$1
@@ -126,9 +187,14 @@ while [ "$#" -gt 0 ]; do
         ;;
     "-m")
         ARG_M=true
-        if [ -z $3 ]; then
+        if [ -z $2 ]; then
             DIRECTORY=$2
-            else
+        elif [ "$2" == "-g" ] || [ "$2" == "-a" ] || [ "$2" == "-b" ]; then
+            DIRECTORY=$4
+            if [ "$4" == "-g" ] || [ "$4" == "-a" ] || [ "$4" == "-b" ]; then
+                DIRECTORY=$6
+            fi
+        else
             DIRECTORY=$3
         fi
         ;;
@@ -148,12 +214,32 @@ while [ "$#" -gt 0 ]; do
         date_check
         BEFORE=${DATECHECK}
         ;;
+    "secret-log")
+        ARG_SL=true
+        if [ "$2" == "-a" ] || [ "$2" == "-b" ]; then 
+            if ["$4" == "-a"] || [ "$4" == "-b" ]; then
+                DIRECTORY=$6
+            fi
+            DIRECTORY=$4
+        fi
+        DIRECTORY=$2
+        ;;
     esac
     shift
 done
 
-if [[ $ARG_M && $ARG_G ]]; then
-    most_opened_file_in_group
+if [ ${ARG_LIST} ]; then
+    dir_check
+    was_dir_edited
+    list
+    exit 0
+fi
+
+#-m switch on
+if [ ${ARG_M} ]; then
+    dir_check
+    was_dir_edited
+    most_opened_file
     FILE=$REALPATH
     filename_check
     edit_and_log
@@ -161,7 +247,7 @@ if [[ $ARG_M && $ARG_G ]]; then
 fi
 
 #-g switch on
-if [ $ARG_G ]; then
+if [ ${ARG_G} ]; then
     REALPATH=$(realpath "$FILE")
     DIRECTORY=$(dirname "$REALPATH")
     filename_check
@@ -169,32 +255,15 @@ if [ $ARG_G ]; then
     exit 0
 fi
 
-if [ $ARG_M ]; then
-    dir_check
+if [ -d "${FILE}" ]; then
+    DIRECTORY="${FILE}"
     was_dir_edited
-    most_opened_file
-    FILE=$REALPATH
-    filename_check
-    edit_and_log
-    exit 0
+    last_opened_in_dir
+    FILE=${REALPATH}
 fi
 
-
-#-m switch on
-if [ $ARG_M ]; then
-    dir_check
-    was_dir_edited
-    most_opened_file
-    FILE=$REALPATH
-    filename_check
-    edit_and_log
-    exit 0
-fi
-
-if [ $ARG_LIST ]; then
-    dir_check
-    was_dir_edited
-    list
+if [ ${ARG_SL} ]; then
+    secretlog
     exit 0
 fi
 
