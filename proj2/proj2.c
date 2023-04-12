@@ -43,7 +43,7 @@ int argcheck(int argc, char *argv[]) {
         fprintf(stderr, "Incorrect number of arguments \n");
         return EXIT_FAILURE;
     }
-    
+
     // checks if NZ or NU is in range
     if (NZ < 0 || NU < 0){
         fprintf(stderr, "Incorrect format of arguments (NZ/NU)\n");
@@ -120,8 +120,6 @@ struct Customer{
 
 int main(int argc, char *argv[]) {
 
-
-    semaphore_init();
     // checks if arguments are in correct format
     if (argcheck(argc, argv) == EXIT_FAILURE){
         return EXIT_FAILURE;
@@ -132,15 +130,15 @@ int main(int argc, char *argv[]) {
     int EmployeeMaxBreak = atoi(argv[4]);
     int MaxTime = atoi(argv[5]);
 
-    // sets buffer to NULL
-    setbuf(file, NULL);
 
+    // sets buffer to NULL
+    //setbuf(file, NULL);
     // prints arguments to file
     if (write_to_file(CustomerCount, EmployeeCount, CustomerMaxWait, EmployeeMaxBreak, MaxTime) == EXIT_FAILURE){
         return EXIT_FAILURE;
     }
     
-
+    semaphore_init();
     while( wait(NULL) > 0);
     semaphore_cleanup();
 
