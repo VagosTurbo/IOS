@@ -71,7 +71,7 @@ most_opened_file_in_group(){
 list(){
     # Read the FILENAME field into an array
     #if it was filtered by group
-    if [ -z "${GROUP}" ]; then
+    if [ ! ${ARG_G} ]; then
         mapfile -t filenames < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $4}' ${MOLE_RC} | sort -u )
     else
         mapfile -t filenames < <(awk -F';' -v group="${GROUP}" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before && $1==group) print $4}' ${MOLE_RC} | sort -u )
@@ -151,7 +151,7 @@ secretlog(){
     CONTENT=
     #if directory wasnt inputed log all files within time filters
     if [ -z "${DIRECTORY}" ]; then
-        mapfile -t realpaths < <(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
+        mapfile -t realpaths < <(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u)
     else
         #logging files from inputed directory
         mapfile -t realpaths < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
