@@ -1,5 +1,33 @@
-NZ: 1
-NU: 2
-TZ: 3
-TU: 4
-F: 5
+1: posta sa zatvara o 3
+2: U 1: started
+3: U 2: started
+5: U 1: Caka na zakaznika
+4: U 3: started
+6: U 2: Caka na zakaznika
+8: U 3: Caka na zakaznika
+7: Z 1: started with waittme 8
+11: Z 1: called by office worker
+9: Z 2: started with waittme 8
+10: Z 3: started with waittme 8
+13: U 1: Vybavuje postarske zalezitosti
+12: Z 4: started with waittme 8
+14: U 1: Caka na zakaznika
+15: Z 1: Odchadza domov
+16: Z 2: called by office worker
+17: Z 4: called by office worker
+18: U 2: Vybavuje postarske zalezitosti
+19: U 2: Caka na zakaznika
+20: Z 3: called by office worker
+22: Z 2: Odchadza domov
+23: U 1: Vybavuje postarske zalezitosti
+24: U 1: Caka na zakaznika
+25: U 3: Vybavuje postarske zalezitosti
+26: U 3: Caka na zakaznika
+27: Z 4: Odchadza domov
+21: Z 5: started with waittme 8
+28: Z 3: Odchadza domov
+29: Z 5: called by office worker
+30: U 2: Vybavuje postarske zalezitosti
+31: U 2: Caka na zakaznika
+32: Z 5: Odchadza domov
+33: posta sa zatvorila
