@@ -1,0 +1,34 @@
+--- mole	2023-03-24 14:24:23.794339504 +0100
++++ molepatch	2023-04-21 19:07:56.140256043 +0200
+@@ -70,13 +70,13 @@
+ 
+ list(){
+     # Read the FILENAME field into an array
+-    #if it was filtered by group
+     if [ ! ${ARG_G} ]; then
+-        mapfile -t filenames < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $4}' ${MOLE_RC} | sort -u )
++        readarray -t filenames <<< "$(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $4}' ${MOLE_RC} | sort -u )"
+     else
+-        mapfile -t filenames < <(awk -F';' -v group="${GROUP}" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before && $1==group) print $4}' ${MOLE_RC} | sort -u )
++        readarray -t filenames <<< "$(awk -F';' -v group="${GROUP}" -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before && $1==group) print $4}' ${MOLE_RC} | sort -u )"
+     fi
+ 
++
+     #getting length of longest file for indenting
+     INDENTLENGTH=${#filenames[0]}
+ 
+@@ -151,11 +151,11 @@
+     CONTENT=
+     #if directory wasnt inputed log all files within time filters
+     if [ -z "${DIRECTORY}" ]; then
+-        mapfile -t realpaths < <(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u)
++        readarray -t realpaths <<< "$(awk -F';' -v after="${AFTER}" -v before="${BEFORE}" '{if($5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u)"
+     else
+-        #logging files from inputed directory
+-        mapfile -t realpaths < <(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )
++        readarray -t realpaths <<< "$(awk -F';' -v dir="${DIRECTORY}" -v after="${AFTER}" -v before="${BEFORE}" '{if($3==dir && $5>=after && $5<=before) print $2}' ${MOLE_RC} | sort -u )"
+     fi
++
+     #cycles through list of realpaths
+     for rpath in "${realpaths[@]}"
+     do
