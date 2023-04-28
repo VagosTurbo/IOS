@@ -1,3 +1,9 @@
+/*
+* @author: xseman06
+* @date: 2023-04-20
+* @project: Projekt 2
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -26,6 +32,7 @@ sem_t *employee_done;
 sem_t *semafor;
 sem_t *semafor2;
 sem_t *semafor3;
+sem_t *queue1;
 FILE *file;
 int *action_counter;
 int *post_office;
@@ -94,7 +101,7 @@ void startup(){
         exit(EXIT_FAILURE);
     }
 
-    // initialize semaphores
+    // initialize semaphores and shared variables
     mutex = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     customer_ready = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     employee_ready = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -108,6 +115,7 @@ void startup(){
     queue_size = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     queue_size2 = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     queue_size3 = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    queue1 = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
     if (mutex == MAP_FAILED || customer_ready == MAP_FAILED || employee_ready == MAP_FAILED || customer_done == MAP_FAILED || employee_done == MAP_FAILED || action_counter == MAP_FAILED || post_office == MAP_FAILED || semafor == MAP_FAILED || semafor2 == MAP_FAILED || semafor3 == MAP_FAILED || people_inside == MAP_FAILED){
         fprintf(stderr, "Error creating shared memory\n");
@@ -152,12 +160,11 @@ void cleanup(){
 }
 
 
-void customer_process(Customer customer, int CustomerCount){
-
-    (void) CustomerCount;
+void customer_process(Customer customer){
+    srand(getpid());
 
     sem_wait(mutex);
-    customer.CustomerDemand = rand() % 3;
+    customer.CustomerDemand = (rand() % 3)+1;
     fprintf(file, "%d: Z %d: started\n", ++(*action_counter), customer.CustomerID);
 
     if (*post_office){
@@ -168,22 +175,22 @@ void customer_process(Customer customer, int CustomerCount){
 
     sem_post(mutex);
     sem_post(customer_ready);
-    if (customer.CustomerDemand == 0){
-        (*queue_size)++;
+    sem_wait(mutex);
+    if (customer.CustomerDemand == 1){
+        (*queue_size)++;        
         sem_wait(semafor);
+        fprintf(file, "%d: Z %d: called by office worker\n", ++(*action_counter), customer.CustomerID);
+        sem_post(mutex);
+        sem_post(queue1);
     }
-    else if (customer.CustomerDemand == 1){
+    else if (customer.CustomerDemand == 2){
         (*queue_size2)++;
         sem_wait(semafor2);
     }
-    else if (customer.CustomerDemand == 2){
+    else if (customer.CustomerDemand == 3){
         (*queue_size3)++;
         sem_wait(semafor3);
     }
-
-    sem_wait(mutex);
-    fprintf(file, "%d: Z %d: called by office worker\n", ++(*action_counter), customer.CustomerID);
-    sem_post(mutex);
     
     sem_post(customer_done);
     sem_wait(employee_done);
@@ -193,9 +200,8 @@ void customer_process(Customer customer, int CustomerCount){
 
 void employee_process(int EmployeeID, int breaktime, int EmployeeCount){
 
+    srand(getpid());
     while(true){
-
-
         if ( *queue_size == 0 && *queue_size2 == 0 && *queue_size3 == 0 && *action_counter >= EmployeeCount+1){
             fprintf(file, "%d: U %d: taking break\n", ++(*action_counter), EmployeeID);
             sleep(breaktime);
@@ -219,27 +225,35 @@ void employee_process(int EmployeeID, int breaktime, int EmployeeCount){
                 break;
             }
             if (*queue_size == 0 && *queue_size2 == 0 && *queue_size3 == 0 && *post_office == 0){
+                fprintf(file, "%d: U %d: taking break\n", ++(*action_counter), EmployeeID);
+                sleep(breaktime);
+            }
+            if (*queue_size == 0 && *queue_size2 == 0 && *queue_size3 == 0 && *post_office == 1){
                 fprintf(file, "%d: U %d: going home\n", ++(*action_counter), EmployeeID);
+                exit(EXIT_SUCCESS);
             }
         }
-        sem_post(mutex);
-        
+
         if (rand_queue == 0){
-            fprintf(file, "%d: U %d: pracuje na 0\n", ++(*action_counter), EmployeeID);
             sem_post(semafor);
+            sem_wait(queue1);
+            fprintf(file, "%d: U %d: serving a service of type 1\n", ++(*action_counter), EmployeeID);
+            sem_post(mutex);
         }
         else if (rand_queue == 1){
-            fprintf(file, "%d: U %d: pracuje na 1\n", ++(*action_counter), EmployeeID);
+            fprintf(file, "%d: U %d: serving a service of type 2\n", ++(*action_counter), EmployeeID);
             sem_post(semafor2);
+            sem_post(mutex);
         }
         else if (rand_queue == 2){
-            fprintf(file, "%d: U %d: pracuje na 2\n", ++(*action_counter), EmployeeID);
+            fprintf(file, "%d: U %d: serving a service of type 3\n", ++(*action_counter), EmployeeID);
             sem_post(semafor3);
+            sem_post(mutex);
         }
         sem_wait(customer_done);
+
         sem_post(employee_done);
     }
-    fprintf(file, "%d: KOKOOOOOOOOOOOOOOOOOOOOOT\n", ++(*action_counter));
     exit(EXIT_SUCCESS);
     (void) breaktime;
 }
@@ -248,7 +262,7 @@ void employee_process(int EmployeeID, int breaktime, int EmployeeCount){
 
 int main(int argc, char *argv[]) {
 
-    srand(time(NULL));
+    
     // checks if arguments are in correct format
     if (argcheck(argc, argv) == EXIT_FAILURE){
         return EXIT_FAILURE;
@@ -268,9 +282,7 @@ int main(int argc, char *argv[]) {
         sleep(kokot);
         fprintf(file, "%d: closing\n", ++(*action_counter));
         (*post_office) = 1;
-        for (int i = 0; i < EmployeeCount; i++){
-            sem_post(customer_ready);
-        }
+        sem_post(customer_ready);
         exit(EXIT_SUCCESS);
     }
 
@@ -293,7 +305,7 @@ int main(int argc, char *argv[]) {
             customer.CustomerID = i+1;
             customer.CustomerWaitTime = CustomerMaxWait;
             customer.CustomerDemand = rand() % 3;
-            customer_process(customer, CustomerCount);
+            customer_process(customer);
             exit(EXIT_SUCCESS);
         }
     }
