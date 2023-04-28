@@ -101,7 +101,7 @@ void startup(){
         exit(EXIT_FAILURE);
     }
 
-    // initialize semaphores and shared variables
+    // initialize shared variables
     mutex = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     customer_ready = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     employee_ready = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -122,7 +122,18 @@ void startup(){
         exit(EXIT_FAILURE);
     }
 
-    if ( sem_init(mutex, 1, 1) == -1 || sem_init(customer_ready, 1, 0) == -1 ||  sem_init(employee_ready, 1, 0) == -1 || sem_init(customer_done, 1, 0) == -1 || sem_init(employee_done, 1, 0) == -1 || sem_init(semafor, 1, 0) == -1 || sem_init(semafor2, 1, 0) == -1 || sem_init(semafor, 1, 0) == -1){
+
+    // initialize semaphores
+    if ( 
+           sem_init(mutex, 1, 1) == -1 
+        || sem_init(customer_ready, 1, 0) == -1 
+        || sem_init(employee_ready, 1, 0) == -1 
+        || sem_init(customer_done, 1, 0) == -1 
+        || sem_init(employee_done, 1, 0) == -1 
+        || sem_init(semafor, 1, 0) == -1 
+        || sem_init(semafor2, 1, 0) == -1 
+        || sem_init(semafor, 1, 0) == -1
+        ){
         fprintf(stderr, "Error creating semaphore\n");
         exit(EXIT_FAILURE);
     }
@@ -180,7 +191,7 @@ void customer_process(Customer customer){
         (*queue_size)++;        
         sem_wait(semafor);
         fprintf(file, "%d: Z %d: called by office worker\n", ++(*action_counter), customer.CustomerID);
-        sem_post(mutex);
+   
         sem_post(queue1);
     }
     else if (customer.CustomerDemand == 2){
@@ -191,7 +202,7 @@ void customer_process(Customer customer){
         (*queue_size3)++;
         sem_wait(semafor3);
     }
-    
+    sem_post(mutex);
     sem_post(customer_done);
     sem_wait(employee_done);
     fprintf(file, "%d: Z %d: going home\n", ++(*action_counter), customer.CustomerID);
@@ -279,7 +290,7 @@ int main(int argc, char *argv[]) {
     pid_t pid_post_office = fork();
     if (pid_post_office == 0){
         int kokot = rand() % MaxTime;
-        sleep(kokot);
+        usleep(kokot);
         fprintf(file, "%d: closing\n", ++(*action_counter));
         (*post_office) = 1;
         sem_post(customer_ready);
