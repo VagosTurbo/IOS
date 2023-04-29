@@ -136,7 +136,7 @@ void startup(){
         || sem_init(employee_done, 1, 0) == -1 
         || sem_init(queue, 1, 0) == -1 
         || sem_init(queue2, 1, 0) == -1 
-        || sem_init(queue, 1, 0) == -1
+        || sem_init(queue3, 1, 0) == -1
         ){
         fprintf(stderr, "Error creating semaphore\n");
         exit(EXIT_FAILURE);
@@ -181,12 +181,11 @@ void customer_process(Customer customer){
     srand(getpid());
 
     sem_wait(mutex);
-    customer.CustomerDemand = (rand() % 3)+1;
     fprintf(file, "%d: Z %d: started\n", ++(*action_counter), customer.CustomerID);
     sem_post(mutex);
 
     // waits infront of post office
-    sleep(rand() % customer.CustomerWaitTime);
+    usleep((rand() % customer.CustomerWaitTime)*1000);
     
     // enters post office
     sem_wait(mutex);
@@ -195,6 +194,7 @@ void customer_process(Customer customer){
         sem_post(mutex);
         exit(EXIT_SUCCESS);
     }
+    customer.CustomerDemand = (rand() % 3)+1;
     fprintf(file, "%d: Z %d: entering office for a service %d\n", ++(*action_counter), customer.CustomerID, customer.CustomerDemand);
     sem_post(mutex);
 
@@ -220,8 +220,8 @@ void customer_process(Customer customer){
         sem_wait(queue3);
         sem_wait(mutex);
         fprintf(file, "%d: Z %d: called by office worker\n", ++(*action_counter), customer.CustomerID);
-        sem_post(queue3_done);
         sem_post(mutex);
+        sem_post(queue3_done);
     }
     else{
         exit(EXIT_FAILURE);
@@ -243,41 +243,48 @@ void employee_process(int EmployeeID, int breaktime){
 
     while(true){
         int random = (rand() % 3) + 1;
-        printf("U %d: posta %d, queue %d, queue2 %d, queue3 %d\n", EmployeeID, *post_office, *queue_size, *queue_size2, *queue_size3);
+        printf("U %d: posta %d, queue %d, queue2 %d, queue3 %d, rand %d\n", EmployeeID, *post_office, *queue_size, *queue_size2, *queue_size3, random);
         if(random == 1 && *queue_size > 0){
+            sem_wait(mutex);
             sem_post(queue);
             (*queue_size)--;
+            sem_post(mutex);
             sem_wait(queue_done);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: serving service 1\n", ++(*action_counter), EmployeeID);
             sem_post(mutex);
-            sleep(rand() % 10);
+            usleep((rand() % 10)*1000);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: service finished\n", ++(*action_counter), EmployeeID);
             sem_post(employee_done);
             sem_post(mutex);
         }
         else if(random == 2 && *queue_size2 > 0){
+            sem_wait(mutex);
             sem_post(queue2);
             (*queue_size2)--;
+            sem_post(mutex);
             sem_wait(queue2_done);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: serving service 2\n", ++(*action_counter), EmployeeID);
             sem_post(mutex);
-            sleep(rand() % 10);
+            usleep((rand() % 10)*1000);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: service finished\n", ++(*action_counter), EmployeeID);
             sem_post(employee_done);
             sem_post(mutex);
         }
         else if(random == 3 && *queue_size3 > 0){
+            sem_wait(mutex);
             sem_post(queue3);
+            
             (*queue_size3)--;
+            sem_post(mutex);
             sem_wait(queue3_done);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: serving service 3\n", ++(*action_counter), EmployeeID);
             sem_post(mutex);
-            sleep(rand() % 10);
+            usleep((rand() % 10)*1000);
             sem_wait(mutex);
             fprintf(file, "%d: U %d: service finished\n", ++(*action_counter), EmployeeID);
             sem_post(employee_done);
@@ -287,14 +294,17 @@ void employee_process(int EmployeeID, int breaktime){
             sem_wait(mutex);
             fprintf(file, "%d: U %d: going home\n", ++(*action_counter), EmployeeID);
             sem_post(mutex);
-            exit(EXIT_SUCCESS);
+            break;
         }
         else if ( *post_office == 0 && *queue_size == 0 && *queue_size2 == 0 && *queue_size3 == 0){
             sem_wait(mutex);
             fprintf(file, "%d: U %d: taking break\n", ++(*action_counter), EmployeeID);
             sem_post(mutex);
-            sleep(rand() % breaktime);
+            usleep((rand() % breaktime)*1000);
             fprintf(file, "%d: U %d: break finished\n", ++(*action_counter), EmployeeID);
+        }
+        if (*queue_size < 0 || *queue_size2 < 0 || *queue_size3 < 0){
+            exit(EXIT_FAILURE);
         }
     }
 }
@@ -319,8 +329,8 @@ int main(int argc, char *argv[]) {
 
     pid_t pid_post_office = fork();
     if (pid_post_office == 0){
-        int kokot = rand() % MaxTime;
-        sleep(kokot);
+        int closing_hours = rand() % MaxTime;
+        usleep(closing_hours * 1000);
         fprintf(file, "%d: closing\n", ++(*action_counter));
         (*post_office) = 1;
         exit(EXIT_SUCCESS);
