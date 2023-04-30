@@ -15,7 +15,6 @@
  * okomentovat veci
 */
 
-
 // prints help how to use the program
 void help(){
     fprintf(stderr, "Usage: ./proj2 NZ NU TZ TU F\n");
@@ -49,7 +48,7 @@ int argcheck(int argc, char *argv[]) {
     }
 
     // checks if NZ or NU is in range
-    if (NZ < 0 || NU < 0){
+    if (NZ < 0 || NU <= 0){
         fprintf(stderr, "Incorrect format of arguments (NZ/NU)\n");
         return EXIT_FAILURE;
     }
@@ -176,7 +175,8 @@ void customer_process(Customer customer){
     sem_post(mutex);
 
     // wait for a random amount of time before entering the post office
-    usleep((rand() % customer.CustomerWaitTime)*1000);
+    if (customer.CustomerWaitTime > 0)
+        usleep((rand() % customer.CustomerWaitTime)*1000);
     
     // try to enter the post office
     sem_wait(mutex);
@@ -231,7 +231,9 @@ void customer_process(Customer customer){
     sem_wait(mutex);
     fprintf(file, "%d: Z %d: going home\n", ++(*action_counter), customer.CustomerID);
     sem_post(mutex);
-    cleanup();
+    if (file != NULL){
+        fclose(file);
+    }
     exit(EXIT_SUCCESS);
 
 }
@@ -327,17 +329,30 @@ void employee_process(int EmployeeID, int breaktime){
             sem_post(mutex);
 
             // simulate the break time
-            usleep((rand() % breaktime)*1000);
+            int pause;
+            if (breaktime == 1){
+                pause = 1;
+            }
+            else if (breaktime == 0){
+                pause = 0;
+            }
+            else{
+                pause = rand() % breaktime;
+            }
+            usleep(pause*1000);
+            sem_wait(mutex);
             fprintf(file, "%d: U %d: break finished\n", ++(*action_counter), EmployeeID);
+            sem_post(mutex);
         }
         if (*queue_size < 0 || *queue_size2 < 0 || *queue_size3 < 0){
             fprintf(stderr, "Error: Queue size is negative\n");
             exit(EXIT_FAILURE);
         }
     }
+    if (file != NULL){
+        fclose(file);
+    }
 }
-
-
 
 int main(int argc, char *argv[]) {
 
@@ -358,8 +373,14 @@ int main(int argc, char *argv[]) {
     pid_t pid_post_office = fork();
     if (pid_post_office == 0){
         srand(getpid());
-        int closing_hours = (rand() % (MaxTime/2)) + (MaxTime/2);
-        printf("closing hours: %d\n", closing_hours);
+        int closing_hours;
+        // if Maxtime is 0, just set closing hours to 0, because rand() % 0 would cause error
+        if (MaxTime == 0){
+            closing_hours = 0;
+        }
+        else {
+            closing_hours = (rand() % (MaxTime/2)) + (MaxTime/2);
+        }
         usleep(closing_hours * 1000);
         fprintf(file, "%d: closing\n", ++(*action_counter));
         (*post_office) = 1;
@@ -370,6 +391,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "fork failed\n");
         return EXIT_FAILURE;
     }
+
 
     // create employee processes
     for (int i = 0; i < EmployeeCount; i++){
@@ -403,6 +425,7 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
     }
+
     while( wait(NULL) > 0);
     cleanup();
     return EXIT_SUCCESS;

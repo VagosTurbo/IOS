@@ -1,4 +1,3 @@
-
 // @author: xseman06
 // @date: 2023-04-20
 // @project: Projekt 2
@@ -27,8 +26,6 @@
 #define EXIT_FAILURE 1
 
 sem_t *mutex;
-sem_t *customer_ready;
-sem_t *employee_ready;
 sem_t *customer_done;
 sem_t *employee_done;
 sem_t *queue;
@@ -38,11 +35,9 @@ sem_t *queue_done;
 sem_t *queue2_done;
 sem_t *queue3_done;
 
-
 FILE *file;
 int *action_counter;
 int *post_office;
-int *people_inside;
 int *queue_size;
 int *queue_size2;
 int *queue_size3;
@@ -53,7 +48,6 @@ typedef struct{
     int CustomerDemand;
 } Customer; 
 
-
 // Functions
 void help();
 int argcheck(int argc, char *argv[]);
@@ -61,5 +55,6 @@ void startup();
 void cleanup();
 void customer_process(Customer customer);
 void employee_process(int EmployeeID, int breaktime);
+
 
 #endif // PROJ2_H
